@@ -4,7 +4,7 @@ import time
 import os
 import sys
 import platform
-from tinydb import TinyDB, Query
+import csv
 from plyer import notification
 import schedule
 import uuid
@@ -20,9 +20,9 @@ import winsound
 
 # Global variables
 running = True
-db = TinyDB('tasks.json')
 tray_icon = None
 window = None
+TASKS_CSV = 'tasks.csv'
 
 def show_window():
     global tray_icon
@@ -68,7 +68,10 @@ class Api:
             interval = float(interval)
             if task.strip() and interval > 0:
                 task_id = str(uuid.uuid4())
-                db.insert({'id': task_id, 'task': task, 'interval': interval})
+                # Append to CSV
+                with open(TASKS_CSV, 'a', newline='', encoding='utf-8') as f:
+                    writer = csv.writer(f)
+                    writer.writerow([task_id, task, interval])
                 # Schedule using the correct interval in minutes (as int)
                 schedule.every(int(interval)).minutes.do(self.show_notification, task_id=task_id, task=task).tag(task_id)
                 return {"status": "success", "message": f"Task '{task}' added"}
@@ -78,21 +81,35 @@ class Api:
             return {"status": "error", "message": "Invalid interval"}
 
     def delete_task(self, task_id):
-        if db.search(Query().id == task_id):
-            db.remove(Query().id == task_id)
-            schedule.clear(task_id)
+        tasks = self.get_tasks()
+        found = False
+        # Remove from CSV
+        with open(TASKS_CSV, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            for t in tasks:
+                if t['id'] != task_id:
+                    writer.writerow([t['id'], t['task'], t['interval']])
+                else:
+                    found = True
+        schedule.clear(task_id)
+        if found:
             return {"status": "success", "message": "Task deleted"}
         return {"status": "error", "message": "Task not found"}
 
     def get_tasks(self):
-        # TinyDB stores documents with string keys in the default table
-        # Convert to a list of dicts for the frontend
-        table = db.table('_default')
-        docs = table.all()
-        # Fix: If docs is a dict (old TinyDB format), convert to list
-        if isinstance(docs, dict):
-            docs = list(docs.values())
-        return docs
+        tasks = []
+        if os.path.exists(TASKS_CSV):
+            with open(TASKS_CSV, 'r', newline='', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                for row in reader:
+                    # Defensive: skip empty or malformed rows
+                    if len(row) == 3 and row[0] and row[1] and row[2]:
+                        try:
+                            interval = float(row[2])
+                        except ValueError:
+                            continue
+                        tasks.append({'id': row[0], 'task': row[1], 'interval': interval})
+        return tasks
 
     def minimize_to_tray(self):
         if window:
@@ -144,7 +161,6 @@ def exit_app():
     global running, tray_icon
     running = False
     schedule.clear()
-    db.close()
     # Prevent double stop or NoneType error
     if tray_icon is not None:
         try:
@@ -184,14 +200,16 @@ def setup_autostart():
         print("Warning: Auto-start only supported on Windows with pywin32.")
 
 def load_tasks():
-    # Only load tasks if tasks.json exists and is not empty
-    if os.path.exists('tasks.json') and os.path.getsize('tasks.json') > 0:
-        tasks = db.all()
-        for task in tasks:
-            # Schedule using the correct interval in minutes (as int)
-            schedule.every(int(task['interval'])).minutes.do(Api().show_notification, task_id=task['id'], task=task['task']).tag(task['id'])
+    # Only load tasks if tasks.csv exists and is not empty
+    if os.path.exists(TASKS_CSV) and os.path.getsize(TASKS_CSV) > 0:
+        with open(TASKS_CSV, 'r', newline='', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                if len(row) == 3:
+                    task_id, task, interval = row
+                    schedule.every(int(float(interval))).minutes.do(Api().show_notification, task_id=task_id, task=task).tag(task_id)
     else:
-        print("No tasks to load from tasks.json.")
+        print("No tasks to load from tasks.csv.")
 
 if __name__ == "__main__":
     setup_autostart()
