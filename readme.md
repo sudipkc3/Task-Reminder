@@ -63,6 +63,18 @@ All required packages are listed in `requirements.txt`.
 - If you encounter permission issues, try running PowerShell as Administrator.
 - For best results, keep the application running to receive timely reminders.
 
+## Creating a Standalone App (EXE)
+
+To create a standalone Windows executable (EXE) of the Task Reminder app, use PyInstaller with the following command (run in PowerShell):
+
+```powershell
+.\reminder_venv\Scripts\pyinstaller.exe --noconsole --add-data "index.html;." --add-data "styles.css;." --add-data "reminder.ico;." --icon=reminder.ico "task_reminder.py"
+```
+
+- This will generate a `dist` folder containing `task_reminder.exe`.
+- Double-click the EXE to run the app without needing Python installed.
+- Make sure all required files (`index.html`, `styles.css`, `reminder.ico`) are present in the project directory when running the command.
+
 ## Contact Me
 
 For questions, suggestions, or bug reports, please contact:
