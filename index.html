@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Reminder</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Task Reminder</h1>
+        <div class="card">
+            <div class="input-group">
+                <label for="task-input">Task</label>
+                <input id="task-input" type="text" placeholder="Enter task">
+            </div>
+            <div class="input-group">
+                <label for="interval-input">Interval (min)</label>
+                <input id="interval-input" type="number" min="1" value="5" placeholder="5">
+            </div>
+            <div class="button-group">
+                <button onclick="addTask()">➕ Add Task</button>
+                <button onclick="window.pywebview.api.minimize_to_tray()">↙️ Minimize</button>
+                <button onclick="toggleTheme()">🌗 Theme</button>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Tasks</h2>
+            <div id="task-list"></div>
+        </div>
+        <div id="status"></div>
+    </div>
+
+    <div id="add-task-modal" class="modal">
+        <div class="modal-content">
+            <h2>Add New Task</h2>
+            <div class="input-group">
+                <label for="modal-task-input">Task</label>
+                <input id="modal-task-input" type="text" placeholder="Enter task">
+            </div>
+            <div class="input-group">
+                <label for="modal-interval-input">Interval (min)</label>
+                <input id="modal-interval-input" type="number" min="1" value="5" placeholder="5">
+            </div>
+            <div class="button-group">
+                <button onclick="addTaskFromModal()">➕ Add Task</button>
+                <button onclick="closeModal()">Cancel</button>
+            </div>
+            <div id="modal-status"></div>
+        </div>
+    </div>
+
+    <script>
+        function updateTaskList() {
+            window.pywebview.api.get_tasks().then(tasks => {
+                const taskList = document.getElementById('task-list');
+                taskList.innerHTML = '';
+                tasks.forEach(task => {
+                    const taskDiv = document.createElement('div');
+                    taskDiv.className = 'task-item';
+                    taskDiv.innerHTML = `
+                        <span ">${task.task} (${task.interval} min)</span>
+                        <button  onclick="deleteTask('${task.id}')">🗑️</button>
+                    `;
+                    taskList.appendChild(taskDiv);
+                });
+            });
+        }
+
+        function addTask() {
+            const task = document.getElementById('task-input').value;
+            const interval = document.getElementById('interval-input').value;
+            window.pywebview.api.add_task(task, interval).then(response => {
+                showStatus(response.message, response.status === 'error' ? 'error' : 'success');
+                if (response.status === 'success') {
+                    document.getElementById('task-input').value = '';
+                    updateTaskList();
+                }
+            });
+        }
+
+        function addTaskFromModal() {
+            const task = document.getElementById('modal-task-input').value;
+            const interval = document.getElementById('modal-interval-input').value;
+            window.pywebview.api.add_task(task, interval).then(response => {
+                showModalStatus(response.message, response.status === 'error' ? 'error' : 'success');
+                if (response.status === 'success') {
+                    document.getElementById('modal-task-input').value = '';
+                    closeModal();
+                    updateTaskList();
+                }
+            });
+        }
+
+        function deleteTask(taskId) {
+            window.pywebview.api.delete_task(taskId).then(response => {
+                showStatus(response.message, response.status === 'error' ? 'error' : 'success');
+                if (response.status === 'success') {
+                    updateTaskList();
+                }
+            });
+        }
+
+        function showStatus(message, type) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = type;
+            setTimeout(() => status.textContent = '', 3000);
+        }
+
+        function showModalStatus(message, type) {
+            const status = document.getElementById('modal-status');
+            status.textContent = message;
+            status.className = type;
+            setTimeout(() => status.textContent = '', 3000);
+        }
+
+        function toggleTheme() {
+            const html = document.documentElement;
+            const currentTheme = html.getAttribute('data-theme');
+            html.setAttribute('data-theme', currentTheme === 'dark' ? 'light' : 'dark');
+            window.pywebview.api.toggle_theme();
+        }
+
+        function showAddTaskModal() {
+            document.getElementById('add-task-modal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('add-task-modal').style.display = 'none';
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            updateTaskList();
+        });
+    </script>
+</body>
+</html>
